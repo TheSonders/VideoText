@@ -6,6 +6,8 @@ It's composed of 3 main modules, furthermore a top level:
 - a simple text editor with backspace, 14 colors more background, inverted video and blinky text
 - video driver itself with a resolution of 640x480 pixels @ 60 Hz
 
+Updated!!! Added RETURN function in Text_Editor.v
+
 Font is 16x16 pixels monotype
 
 Other files are: font source acting as a ROM, an initialized Video RAM with menu and the keycode to ASCII map
