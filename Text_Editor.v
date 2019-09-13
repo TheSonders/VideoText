@@ -55,6 +55,9 @@
 `define	TILDE			8'hB4
 `define	DIERESIS		8'hA8
 
+`define	MaxColumns	6'd40
+`define	MaxRows		5'd28
+
 module Text_Editor(
 	input sys_clk,NewKey,
 	input [7:0] Ascii,
@@ -66,10 +69,12 @@ module Text_Editor(
 	 
 reg [2:0] State=`WaitingKey;
 
-reg [10:0] int_addr=0;
 reg [7:0] CurrentMode=8'h0F;
 reg SignalDelete;
 reg Tilde,Dieresis;
+
+reg [5:0]Column=0;
+reg [4:0]Row=0;
 
 always @(posedge sys_clk) begin
 case (State)
@@ -79,23 +84,36 @@ case (State)
 				`NULLCHAR:;
 				`UP:
 					if (mem_addr>11'd39) begin 
-						mem_data=(mem_data & `ResetCursor);we=1;int_addr=mem_addr-40;State=`EraseCursor;end
+						mem_data=(mem_data & `ResetCursor);we=1;Row=Row-1;State=`EraseCursor;end
 				`DOWN:
 					if (mem_addr<11'd1080) begin 
-						mem_data=(mem_data & `ResetCursor);we=1;int_addr=mem_addr+40;State=`EraseCursor;end
+						mem_data=(mem_data & `ResetCursor);we=1;Row=Row+1;State=`EraseCursor;end
 				`LEFT:
 					if (mem_addr>11'd0) begin 
-						mem_data=(mem_data & `ResetCursor);we=1;int_addr=mem_addr-1;State=`EraseCursor;end
+						mem_data=(mem_data & `ResetCursor);we=1;
+							if (Column>0) Column=Column-1;
+							else begin Column=`MaxColumns-1;Row=Row-1;end
+						State=`EraseCursor;end
 				`RIGHT:
 					if (mem_addr<11'd1119) begin 
-						mem_data=(mem_data & `ResetCursor);we=1;int_addr=mem_addr+1;State=`EraseCursor;end
+						mem_data=(mem_data & `ResetCursor);we=1;
+						if (Column==(`MaxColumns-1)) begin Column=0;Row=Row+1;end
+						else Column=Column+6'd1;
+						State=`EraseCursor;end
 				`BACKSPACE:
 					if (mem_addr>11'd0) begin 
-						mem_data=(mem_data & `ResetCursor);we=1;int_addr=mem_addr-1;State=`EraseCursor;SignalDelete=1;end
+						mem_data=(mem_data & `ResetCursor);we=1;
+							if (Column) Column=Column-1;
+							else begin Column=`MaxColumns-1;Row=Row-1;end
+						State=`EraseCursor;SignalDelete=1;end
 				`TILDE: begin
 					Tilde=~Tilde;Dieresis=1'b0;end
 				`DIERESIS: begin
 					Dieresis=~Dieresis;Tilde=1'b0;end
+				`RETURN: begin
+					mem_data=(mem_data & `ResetCursor);we=1;Column=0;
+					if (Row<(`MaxRows-1)) Row=Row+1;
+					State=`EraseCursor;end
 				`F1:  CurrentMode={CurrentMode[7:4],`CWhite,CurrentMode[0]};
 				`F2:  CurrentMode={CurrentMode[7:4],`CYellow,CurrentMode[0]};
 				`F3:  CurrentMode={CurrentMode[7:4],`CMagenta,CurrentMode[0]};
@@ -141,14 +159,15 @@ case (State)
 						else begin
 							mem_data={CurrentMode,Ascii};
 						end
-						if (mem_addr<11'd1119) int_addr=mem_addr+1;
-						else int_addr=mem_addr;
+						if (mem_addr<11'd1119) begin 
+								if (Column==(`MaxColumns-1)) begin Column=0;Row=Row+1;end
+								else Column=Column+6'd1; end
 						State=`EraseCursor;we=1;
 					end
-			endcase			
+			endcase  //Ascii			
 		end
 	`EraseCursor: begin
-		we=0;mem_addr=int_addr;
+		we=0;mem_addr=Row*40 + Column;
 		State=`UpdateCursor;end
 	`UpdateCursor: begin
 		if ((ret_data[7:0]==8'h00) || (SignalDelete)) begin  // Memory not initialized or delete character
@@ -158,7 +177,7 @@ case (State)
 		we=1;State=`FinishCursor;end
 	`FinishCursor: begin
 		we=0;State=`WaitingKey;end	
-endcase
+endcase  //State
 end
 
 endmodule
